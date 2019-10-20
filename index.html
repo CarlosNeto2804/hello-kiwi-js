@@ -1,0 +1,198 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+
+<script src="./lib/kiwi.min.js"></script>
+<script src="./lib/kiwipreloader.js"></script>
+</head>
+<body>
+    <div id="game-container"></div>
+</body>
+
+
+
+<script>
+var state = new Kiwi.State('Play');
+
+
+//carregar arquivos externos
+state.preload = function () {
+	this.addJSON( 'tilemap', './assets/data/anime.json');
+	this.addSpriteSheet( 'tiles', './assets/images/terrain.png', 48, 48 );
+	this.addSpriteSheet( 'personagem_princesa', './assets/images/princess.png', 150, 117 );
+	this.addImage( 'fundo_ceu_azul', './assets/images/sky-bg.png' );
+};
+
+
+//Setup our game world
+state.create = function () {
+
+	//Inserir fundo azul
+	this.fundo_ceu_azul = new Kiwi.GameObjects.StaticImage( this, this.textures.fundo_ceu_azul );
+	this.addChild( this.fundo_ceu_azul );
+	
+
+	//Instanciar princesa personagem_princesa
+	this.personagem_princesa = new Kiwi.GameObjects.Sprite(this, this.textures.personagem_princesa, 0, 75);	
+
+
+	//Adicionar propriedades fisicas na princesa
+	this.personagem_princesa.box.hitbox = new Kiwi.Geom.Rectangle( 48, 0, 50, 117 ); 
+	this.personagem_princesa.physics = this.personagem_princesa.components.add( 
+		new Kiwi.Components.ArcadePhysics( this.personagem_princesa, this.personagem_princesa.box ) );
+	this.personagem_princesa.physics.acceleration.y = 77;
+	this.personagem_princesa.physics.maxVelocity.y = 140;
+
+	//Animações da princesa                
+	//this.personagem_princesa.animation.add( 'nome', posição(ões) do vetor,velocidade de troca em s, loop );
+	this.personagem_princesa.animation.add('andar', [ 1, 2, 3, 4, 5, 6 ], 0.08, true);
+	this.personagem_princesa.animation.add('parada', [ 0 ], 0.1, true, false);
+	this.personagem_princesa.animation.add('pulando', [ 10 ], 0.1, true);
+	this.personagem_princesa.animation.add('caindo', [ 9 ], 0.1, true);
+	//Inserir princesa na tela
+	this.addChild(this.personagem_princesa);
+
+
+	//Criar cenario
+	this.tilemap = new Kiwi.GameObjects.Tilemap.TileMap(this, 'tilemap', this.textures.tiles);
+	//montar ambiente
+	for( var i = 0; i < this.tilemap.layers.length; i++ ) {
+		this.addChild( this.tilemap.layers[ i ] );
+	}
+
+	for(var i = 1; i < this.tilemap.tileTypes.length; i++) {
+		this.tilemap.tileTypes[i].allowCollisions = Kiwi.Components.ArcadePhysics.ANY;
+	}
+
+
+	//Adicionar os controles do game
+	this.keyboard = this.game.input.keyboard;
+
+	this.leftKey = this.keyboard.addKey(Kiwi.Input.Keycodes.LEFT, true);
+	this.rightKey = this.keyboard.addKey(Kiwi.Input.Keycodes.RIGHT, true);
+	this.jumpKey = this.keyboard.addKey(Kiwi.Input.Keycodes.UP, true);
+	//rolar a pagina quando apertar seta para baixo
+	this.keyboard.addKey(Kiwi.Input.Keycodes.DOWN, true);
+
+	//eventos de teclado 
+	this.keyboard.onKeyDownOnce.add(this.keyDownOnce, this);
+	this.keyboard.onKeyUp.add(this.keyUp, this);
+
+}
+
+
+state.update = function () {
+	//Aualizar todos os GameObjects
+	Kiwi.State.prototype.update.call(this);
+
+	
+	this.checkCollision();
+
+	this.atualizarMovimentoDaPersonagem();
+	this.atualizarAnimacao();
+	
+	this.reiniciarGame();
+}
+
+
+//verifica se existe colisçao entre personagem e canario
+state.checkCollision = function () {
+	this.tilemap.layers[0].physics.overlapsTiles( this.personagem_princesa, true );
+}
+
+
+//U
+state.atualizarMovimentoDaPersonagem = function () {
+	
+	if ( this.leftPressed ) {
+		this.personagem_princesa.scaleX = -1;
+		this.personagem_princesa.physics.velocity.x = -40;
+
+	} else if ( this.rightPressed ) {
+		this.personagem_princesa.scaleX = 1;
+		this.personagem_princesa.physics.velocity.x = 40;
+
+	} else {
+		this.personagem_princesa.physics.velocity.x = 0;
+	}
+
+	if (this.jumpPressed && this.personagem_princesa.physics.isTouching( 
+			Kiwi.Components.ArcadePhysics.DOWN ) ){
+		this.personagem_princesa.physics.velocity.y = -95;
+	}
+
+}
+
+state.atualizarAnimacao = function () {
+
+	if( !this.personagem_princesa.physics.isTouching( Kiwi.Components.ArcadePhysics.DOWN ) ) {
+
+		if( this.personagem_princesa.physics.velocity.y > 0 ) {
+			this.personagem_princesa.animation.play('caindo', false);
+		} else {
+			this.personagem_princesa.animation.play('pulando', false);
+		}
+
+	} else if ( this.rightPressed || this.leftPressed ){
+		this.personagem_princesa.animation.play('andar', false);
+
+	} else {
+		this.personagem_princesa.animation.play('parada', false);
+		
+	}
+
+}
+
+
+//Reiniciar
+state.reiniciarGame = function() {
+
+	if( this.personagem_princesa.y > this.game.stage.height + this.game.stage.height / 2 ) {
+		this.personagem_princesa.y = 75;
+		this.personagem_princesa.x = 0;
+		this.personagem_princesa.physics.velocity.y = 0;
+	}
+
+}
+
+
+//Verificar qual tecla esta pressionada
+state.keyDownOnce = function(keyCode, key) {
+	if( keyCode === this.rightKey.keyCode ){
+		this.rightPressed = true;
+	} 
+
+	if( keyCode === this.leftKey.keyCode ){
+		this.leftPressed = true;
+	} 
+
+	if( keyCode === this.jumpKey.keyCode ){
+		this.jumpPressed = true;
+	} 
+}
+
+state.keyUp = function(keyCode, key) {
+
+	if( keyCode === this.rightKey.keyCode ){
+		this.rightPressed = false;
+	} 
+
+	if( keyCode === this.leftKey.keyCode ){
+		this.leftPressed = false;
+	} 
+
+	if( keyCode === this.jumpKey.keyCode){
+		this.jumpPressed = false;
+	} 
+
+}
+
+
+//Create the game.
+var gameOptions = {
+	width: 768,
+	height: 512
+};
+
+var game = new Kiwi.Game('game-container', 'Tilemap with Arcade Physics', state, gameOptions);
+</script>
+</html>
